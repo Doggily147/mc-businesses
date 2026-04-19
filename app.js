@@ -23,11 +23,33 @@
         return (h >>> 0).toString(36);
     }
 
-    function getSession() { return localStorage.getItem(STORE_SESSION); }
-    function setSession(name) { localStorage.setItem(STORE_SESSION, name); }
-    function clearSession() { localStorage.removeItem(STORE_SESSION); }
+    // "Remember me" determines storage:
+    //   - true  -> localStorage (persists forever)
+    //   - false -> sessionStorage (clears when browser closes)
+    function getSession() {
+        return localStorage.getItem(STORE_SESSION) || sessionStorage.getItem(STORE_SESSION);
+    }
+    function setSession(name, remember) {
+        if (remember) {
+            localStorage.setItem(STORE_SESSION, name);
+            sessionStorage.removeItem(STORE_SESSION);
+        } else {
+            sessionStorage.setItem(STORE_SESSION, name);
+            localStorage.removeItem(STORE_SESSION);
+        }
+    }
+    function clearSession() {
+        localStorage.removeItem(STORE_SESSION);
+        sessionStorage.removeItem(STORE_SESSION);
+    }
+    function getLastUsername() {
+        return localStorage.getItem('mcb.lastUser') || '';
+    }
+    function setLastUsername(name) {
+        localStorage.setItem('mcb.lastUser', name);
+    }
 
-    function loginOrRegister(username, password) {
+    function loginOrRegister(username, password, remember) {
         username = username.trim();
         if (!username || username.length < 2 || username.length > 16) return 'Username must be 2-16 chars.';
         if (!/^[A-Za-z0-9_]+$/.test(username)) return 'Username: letters, digits, underscore only.';
@@ -38,11 +60,17 @@
 
         if (users[username]) {
             if (users[username].passHash !== hash) return 'Wrong password.';
+            users[username].lastLogin = new Date().toISOString();
         } else {
-            users[username] = { passHash: hash, registeredAt: new Date().toISOString() };
-            saveUsers(users);
+            users[username] = {
+                passHash: hash,
+                registeredAt: new Date().toISOString(),
+                lastLogin: new Date().toISOString()
+            };
         }
-        setSession(username);
+        saveUsers(users);
+        setSession(username, remember !== false);
+        setLastUsername(username);
         return null; // success
     }
 
@@ -161,6 +189,65 @@
     }
     // Auto-wire on every page load
     document.addEventListener('DOMContentLoaded', wireLoginModal);
+
+    // ===== Login gate (full-page) =====
+    function applyLoginGate() {
+        const gate = document.getElementById('loginGate');
+        const main = document.getElementById('appMain');
+        if (!gate || !main) return;
+        const session = getSession();
+        if (session) {
+            gate.style.display = 'none';
+            main.hidden = false;
+        } else {
+            gate.style.display = 'flex';
+            main.hidden = true;
+        }
+    }
+
+    function wireLoginGate() {
+        const gate = document.getElementById('loginGate');
+        if (!gate) return;
+        const userInput = document.getElementById('gateUser');
+        const passInput = document.getElementById('gatePass');
+        const rememberCb = document.getElementById('gateRemember');
+        const errEl = document.getElementById('gateError');
+        const btn = document.getElementById('gateLoginBtn');
+
+        // Pre-fill last username
+        const last = getLastUsername();
+        if (last) {
+            userInput.value = last;
+            passInput.focus();
+        } else {
+            userInput.focus();
+        }
+
+        const submit = () => {
+            errEl.textContent = '';
+            const err = loginOrRegister(userInput.value, passInput.value, rememberCb.checked);
+            if (err) {
+                errEl.textContent = err;
+                return;
+            }
+            applyLoginGate();
+            // Trigger any post-login renders
+            renderAuthArea();
+            // Reload to refresh data and owner-specific UI
+            location.reload();
+        };
+
+        btn.onclick = submit;
+        [userInput, passInput].forEach(el => {
+            el.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+        });
+    }
+
+    // Run gate on every page load BEFORE other logic
+    document.addEventListener('DOMContentLoaded', () => {
+        applyLoginGate();
+        wireLoginGate();
+    });
 
     // Expose globally for other scripts
     window.MCB = {

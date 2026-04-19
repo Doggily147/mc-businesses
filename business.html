@@ -9,6 +9,25 @@
 </head>
 <body>
 
+<!-- Full-page login gate (shown by default, hidden after login) -->
+<div id="loginGate" class="login-gate">
+  <div class="login-card">
+    <div class="login-logo">⛏️</div>
+    <h1>MC Server Businesses</h1>
+    <p class="muted">Log in to view this business portfolio.</p>
+    <input id="gateUser" type="text" placeholder="Minecraft username" maxlength="16" autocomplete="username">
+    <input id="gatePass" type="password" placeholder="Password" maxlength="40" autocomplete="current-password">
+    <label class="remember">
+      <input type="checkbox" id="gateRemember" checked>
+      <span>Remember me on this browser</span>
+    </label>
+    <button id="gateLoginBtn" class="primary big">Log in / Sign up</button>
+    <p id="gateError" class="error"></p>
+  </div>
+</div>
+
+<div id="appMain" hidden>
+
 <header class="topbar">
   <div class="brand">
     <a href="index.html" class="back">←</a>
@@ -98,6 +117,8 @@
     <p id="pError" class="error"></p>
   </div>
 </div>
+
+</div> <!-- /#appMain -->
 
 <script src="app.js"></script>
 <script src="business.js"></script>

@@ -122,3 +122,32 @@ button.primary:hover { background: #6dd687; }
 .growth-cell .gc-val { font-size: 18px; color: var(--accent-2); font-weight: 700; margin-top: 2px; }
 
 footer { text-align: center; padding: 32px; color: var(--muted); font-size: 12px; }
+
+/* Login gate (full-page) */
+.login-gate {
+  position: fixed; inset: 0; background: linear-gradient(135deg, #0a0d12 0%, #18211a 100%);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 16px;
+}
+.login-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+  padding: 36px 32px; width: 100%; max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  text-align: center;
+}
+.login-logo { font-size: 48px; margin-bottom: 12px; }
+.login-card h1 { font-size: 22px; margin-bottom: 8px; }
+.login-card p.muted { font-size: 13px; margin-bottom: 18px; }
+.login-card p.small { font-size: 11px; margin-top: 14px; line-height: 1.6; }
+.login-card input[type="text"], .login-card input[type="password"] {
+  width: 100%; padding: 12px 14px; margin: 6px 0;
+  background: var(--bg); color: var(--text); border: 2px solid var(--border); border-radius: 8px;
+  font: inherit;
+}
+.login-card input:focus { outline: none; border-color: var(--accent); }
+.login-card button.big { width: 100%; padding: 14px; font-size: 15px; margin-top: 8px; }
+.login-card .remember {
+  display: flex; align-items: center; gap: 8px; margin: 12px 0;
+  color: var(--muted); font-size: 13px; cursor: pointer; user-select: none;
+}
+.login-card .remember input { width: 16px; height: 16px; cursor: pointer; }

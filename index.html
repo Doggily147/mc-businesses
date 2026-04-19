@@ -8,6 +8,28 @@
 </head>
 <body>
 
+<!-- Full-page login gate (shown by default, hidden after login) -->
+<div id="loginGate" class="login-gate">
+  <div class="login-card">
+    <div class="login-logo">⛏️</div>
+    <h1>MC Server Businesses</h1>
+    <p class="muted">Log in to browse businesses, manage your portfolio, and log purchases.</p>
+    <input id="gateUser" type="text" placeholder="Minecraft username" maxlength="16" autocomplete="username">
+    <input id="gatePass" type="password" placeholder="Password" maxlength="40" autocomplete="current-password">
+    <label class="remember">
+      <input type="checkbox" id="gateRemember" checked>
+      <span>Remember me on this browser</span>
+    </label>
+    <button id="gateLoginBtn" class="primary big">Log in / Sign up</button>
+    <p id="gateError" class="error"></p>
+    <p class="muted small">First time? Pick a username + password to register.<br>
+       This site is free and runs on GitHub Pages.</p>
+  </div>
+</div>
+
+<!-- Main app (hidden until logged in) -->
+<div id="appMain" hidden>
+
 <header class="topbar">
   <div class="brand">
     <div class="logo">⛏️</div>
@@ -43,6 +65,8 @@
   <p>Built on GitHub Pages · Data: <a href="businesses.json" target="_blank">businesses.json</a> ·
      Suggest an edit by opening a PR on the repo</p>
 </footer>
+
+</div> <!-- /#appMain -->
 
 <!-- Login modal -->
 <div class="modal-bg" id="loginModal" hidden>
