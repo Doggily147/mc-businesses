@@ -49,29 +49,71 @@
         localStorage.setItem('mcb.lastUser', name);
     }
 
-    function loginOrRegister(username, password, remember) {
-        username = username.trim();
-        if (!username || username.length < 2 || username.length > 16) return 'Username must be 2-16 chars.';
-        if (!/^[A-Za-z0-9_]+$/.test(username)) return 'Username: letters, digits, underscore only.';
+    // Find a user by username OR email (login accepts either)
+    function findUserKey(users, identifier) {
+        identifier = (identifier || '').trim().toLowerCase();
+        if (!identifier) return null;
+        for (const key of Object.keys(users)) {
+            if (key.toLowerCase() === identifier) return key;
+            if ((users[key].email || '').toLowerCase() === identifier) return key;
+        }
+        return null;
+    }
+
+    function loginOnly(identifier, password, remember) {
+        if (!identifier || !password) return 'Enter username/email and password.';
+        const users = getUsers();
+        const key = findUserKey(users, identifier);
+        if (!key) return 'No account with that username/email. Sign up first.';
+        if (users[key].passHash !== hashPassword(password)) return 'Wrong password.';
+        users[key].lastLogin = new Date().toISOString();
+        saveUsers(users);
+        setSession(key, remember !== false);
+        setLastUsername(key);
+        return null;
+    }
+
+    function registerOnly(username, email, password, password2, remember) {
+        username = (username || '').trim();
+        email = (email || '').trim();
+        if (!username || username.length < 2 || username.length > 32) return 'Username must be 2-32 chars.';
+        if (!/^[A-Za-z0-9_.-]+$/.test(username)) return 'Username: letters, digits, _ . - only.';
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Valid email required.';
         if (!password || password.length < 4) return 'Password must be 4+ characters.';
+        if (password !== password2) return 'Passwords do not match.';
 
         const users = getUsers();
-        const hash = hashPassword(password);
+        if (findUserKey(users, username)) return 'Username already taken.';
+        if (findUserKey(users, email)) return 'Email already registered.';
 
-        if (users[username]) {
-            if (users[username].passHash !== hash) return 'Wrong password.';
-            users[username].lastLogin = new Date().toISOString();
-        } else {
-            users[username] = {
-                passHash: hash,
-                registeredAt: new Date().toISOString(),
-                lastLogin: new Date().toISOString()
-            };
-        }
+        users[username] = {
+            email,
+            passHash: hashPassword(password),
+            registeredAt: new Date().toISOString(),
+            lastLogin: new Date().toISOString()
+        };
         saveUsers(users);
         setSession(username, remember !== false);
         setLastUsername(username);
-        return null; // success
+        return null;
+    }
+
+    function forgotPassword(identifier) {
+        identifier = (identifier || '').trim();
+        const users = getUsers();
+        const key = identifier ? findUserKey(users, identifier) : null;
+        const knownEmail = key ? (users[key].email || '') : '';
+        const subject = encodeURIComponent('MC Businesses — Password reset request');
+        const body = encodeURIComponent(
+            'Hi Isaac,\n\n' +
+            'I forgot my password for MC Server Businesses and need a reset.\n\n' +
+            'Username / email I tried: ' + (identifier || '(not entered)') + '\n' +
+            (knownEmail ? 'Email on file: ' + knownEmail + '\n' : '') +
+            'Browser: ' + navigator.userAgent + '\n' +
+            'Time: ' + new Date().toISOString() + '\n\n' +
+            'Thanks!'
+        );
+        window.location.href = 'mailto:isaac.huq@gmail.com?subject=' + subject + '&body=' + body;
     }
 
     // ===== Business data =====
@@ -174,12 +216,11 @@
             loginBtn.onclick = () => {
                 const user = document.getElementById('loginUser').value;
                 const pass = document.getElementById('loginPass').value;
-                const err = loginOrRegister(user, pass);
+                const err = loginOnly(user, pass, true);
                 if (err) document.getElementById('loginError').textContent = err;
                 else { closeLogin(); location.reload(); }
             };
             document.getElementById('loginCancel').onclick = closeLogin;
-            // Enter key
             ['loginUser', 'loginPass'].forEach(id => {
                 document.getElementById(id).addEventListener('keydown', e => {
                     if (e.key === 'Enter') loginBtn.click();
@@ -205,39 +246,70 @@
     function wireLoginGate() {
         const gate = document.getElementById('loginGate');
         if (!gate) return;
+
+        // ----- Tab switching -----
+        const tabs = gate.querySelectorAll('.tab');
+        const panes = gate.querySelectorAll('.tab-pane');
+        tabs.forEach(t => {
+            t.onclick = () => {
+                tabs.forEach(x => x.classList.toggle('active', x === t));
+                const which = t.dataset.tab;
+                panes.forEach(p => p.hidden = (p.dataset.pane !== which));
+            };
+        });
+
+        // ----- LOGIN -----
         const userInput = document.getElementById('gateUser');
         const passInput = document.getElementById('gatePass');
         const rememberCb = document.getElementById('gateRemember');
         const errEl = document.getElementById('gateError');
-        const btn = document.getElementById('gateLoginBtn');
+        const loginBtn = document.getElementById('gateLoginBtn');
 
-        // Pre-fill last username
         const last = getLastUsername();
-        if (last) {
-            userInput.value = last;
-            passInput.focus();
-        } else {
-            userInput.focus();
-        }
+        if (last) { userInput.value = last; passInput.focus(); } else { userInput.focus(); }
 
-        const submit = () => {
+        const doLogin = () => {
             errEl.textContent = '';
-            const err = loginOrRegister(userInput.value, passInput.value, rememberCb.checked);
-            if (err) {
-                errEl.textContent = err;
-                return;
-            }
+            const err = loginOnly(userInput.value, passInput.value, rememberCb.checked);
+            if (err) { errEl.textContent = err; return; }
             applyLoginGate();
-            // Trigger any post-login renders
             renderAuthArea();
-            // Reload to refresh data and owner-specific UI
             location.reload();
         };
+        loginBtn.onclick = doLogin;
+        [userInput, passInput].forEach(el =>
+            el.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); }));
 
-        btn.onclick = submit;
-        [userInput, passInput].forEach(el => {
-            el.addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
-        });
+        // ----- Forgot password -----
+        const forgot = document.getElementById('forgotLink');
+        if (forgot) {
+            forgot.onclick = (e) => {
+                e.preventDefault();
+                forgotPassword(userInput.value);
+            };
+        }
+
+        // ----- SIGNUP -----
+        const suUser = document.getElementById('suUser');
+        const suEmail = document.getElementById('suEmail');
+        const suPass = document.getElementById('suPass');
+        const suPass2 = document.getElementById('suPass2');
+        const suRemember = document.getElementById('suRemember');
+        const suError = document.getElementById('suError');
+        const signupBtn = document.getElementById('gateSignupBtn');
+        if (signupBtn) {
+            const doSignup = () => {
+                suError.textContent = '';
+                const err = registerOnly(suUser.value, suEmail.value, suPass.value, suPass2.value, suRemember.checked);
+                if (err) { suError.textContent = err; return; }
+                applyLoginGate();
+                renderAuthArea();
+                location.reload();
+            };
+            signupBtn.onclick = doSignup;
+            [suUser, suEmail, suPass, suPass2].forEach(el =>
+                el.addEventListener('keydown', e => { if (e.key === 'Enter') doSignup(); }));
+        }
     }
 
     // Run gate immediately (script is at end of body, so DOM is ready).

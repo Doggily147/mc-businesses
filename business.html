@@ -14,15 +14,38 @@
   <div class="login-card">
     <div class="login-logo">⛏️</div>
     <h1>MC Server Businesses</h1>
-    <p class="muted">Log in to view this business portfolio.</p>
-    <input id="gateUser" type="text" placeholder="Minecraft username" maxlength="16" autocomplete="username">
-    <input id="gatePass" type="password" placeholder="Password" maxlength="40" autocomplete="current-password">
-    <label class="remember">
-      <input type="checkbox" id="gateRemember" checked>
-      <span>Remember me on this browser</span>
-    </label>
-    <button id="gateLoginBtn" class="primary big">Log in / Sign up</button>
-    <p id="gateError" class="error"></p>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="login">Log in</button>
+      <button class="tab" data-tab="signup">Sign up</button>
+    </div>
+
+    <div class="tab-pane" data-pane="login">
+      <input id="gateUser" type="text" placeholder="Username or email" maxlength="40" autocomplete="username">
+      <input id="gatePass" type="password" placeholder="Password" maxlength="60" autocomplete="current-password">
+      <label class="remember">
+        <input type="checkbox" id="gateRemember" checked>
+        <span>Remember me on this browser</span>
+      </label>
+      <button id="gateLoginBtn" class="primary big">Log in</button>
+      <p class="muted small" style="margin-top:10px">
+        <a href="#" id="forgotLink">Forgot my password</a>
+      </p>
+      <p id="gateError" class="error"></p>
+    </div>
+
+    <div class="tab-pane" data-pane="signup" hidden>
+      <input id="suUser" type="text" placeholder="Username" maxlength="40" autocomplete="username">
+      <input id="suEmail" type="email" placeholder="Email" maxlength="80" autocomplete="email">
+      <input id="suPass" type="password" placeholder="Password (4+ chars)" maxlength="60" autocomplete="new-password">
+      <input id="suPass2" type="password" placeholder="Confirm password" maxlength="60" autocomplete="new-password">
+      <label class="remember">
+        <input type="checkbox" id="suRemember" checked>
+        <span>Remember me on this browser</span>
+      </label>
+      <button id="gateSignupBtn" class="primary big">Create account</button>
+      <p id="suError" class="error"></p>
+    </div>
   </div>
 </div>
 
