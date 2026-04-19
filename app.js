@@ -98,22 +98,52 @@
         return null;
     }
 
-    function forgotPassword(identifier) {
+    // Sends an actual email to isaac.huq@gmail.com via EmailJS (no backend needed).
+    // Returns a Promise<string|null> — null on success, error string on failure.
+    async function forgotPassword(identifier) {
         identifier = (identifier || '').trim();
         const users = getUsers();
         const key = identifier ? findUserKey(users, identifier) : null;
         const knownEmail = key ? (users[key].email || '') : '';
-        const subject = encodeURIComponent('MC Businesses — Password reset request');
-        const body = encodeURIComponent(
-            'Hi Isaac,\n\n' +
-            'I forgot my password for MC Server Businesses and need a reset.\n\n' +
-            'Username / email I tried: ' + (identifier || '(not entered)') + '\n' +
-            (knownEmail ? 'Email on file: ' + knownEmail + '\n' : '') +
-            'Browser: ' + navigator.userAgent + '\n' +
-            'Time: ' + new Date().toISOString() + '\n\n' +
-            'Thanks!'
-        );
-        window.location.href = 'mailto:isaac.huq@gmail.com?subject=' + subject + '&body=' + body;
+
+        const cfg = window.EMAILJS_CONFIG || {};
+        const configured = cfg.PUBLIC_KEY && cfg.PUBLIC_KEY !== 'YOUR_PUBLIC_KEY_HERE'
+            && cfg.SERVICE_ID && cfg.TEMPLATE_ID;
+
+        // Fallback: open mailto if EmailJS isn't configured yet
+        if (!configured || !window.emailjs) {
+            const subject = encodeURIComponent('MC Businesses — Password reset request');
+            const body = encodeURIComponent(
+                'Username/email tried: ' + (identifier || '(not entered)') + '\n' +
+                (knownEmail ? 'Email on file: ' + knownEmail + '\n' : '') +
+                'Browser: ' + navigator.userAgent + '\n' +
+                'Time: ' + new Date().toISOString()
+            );
+            window.location.href = 'mailto:' + (cfg.TO_EMAIL || 'isaac.huq@gmail.com') +
+                '?subject=' + subject + '&body=' + body;
+            return null;
+        }
+
+        const params = {
+            to_email: cfg.TO_EMAIL || 'isaac.huq@gmail.com',
+            identifier: identifier || '(not entered)',
+            email_on_file: knownEmail || '(unknown)',
+            user_agent: navigator.userAgent,
+            time: new Date().toISOString(),
+            message:
+                'Password reset request for MC Server Businesses\n' +
+                'Username/email tried: ' + (identifier || '(not entered)') + '\n' +
+                'Email on file: ' + (knownEmail || '(unknown)') + '\n' +
+                'Browser: ' + navigator.userAgent + '\n' +
+                'Time: ' + new Date().toISOString()
+        };
+
+        try {
+            await emailjs.send(cfg.SERVICE_ID, cfg.TEMPLATE_ID, params);
+            return null;
+        } catch (e) {
+            return 'Could not send email: ' + (e && e.text ? e.text : e);
+        }
     }
 
     // ===== Business data =====
@@ -283,9 +313,13 @@
         // ----- Forgot password -----
         const forgot = document.getElementById('forgotLink');
         if (forgot) {
-            forgot.onclick = (e) => {
+            forgot.onclick = async (e) => {
                 e.preventDefault();
-                forgotPassword(userInput.value);
+                errEl.textContent = 'Sending...';
+                const err = await forgotPassword(userInput.value);
+                errEl.textContent = err
+                    ? err
+                    : '✓ Reset request sent to the admin. You\'ll get a reply soon.';
             };
         }
 
