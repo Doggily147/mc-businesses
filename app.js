@@ -1,166 +1,204 @@
-// MC Businesses — shared logic for login + business loading
-// Storage keys:
-//   mcb.users           = { username: { passHash } }
-//   mcb.session         = currently logged-in username (string)
-//   mcb.businesses      = local overrides/additions to businesses.json
+// MC Businesses — Firebase-backed auth + cloud data
+// Falls back to localStorage-only mode if firebase-config.js isn't filled in yet.
+//
+// Firestore layout:
+//   /businesses/{id}        { name, owner (uid), ownerName, category, baseCurrency,
+//                             description, investmentRate, founded, purchases: [...] }
+//
+// Auth: Firebase Email/Password. Username is stored in displayName.
 
 (function () {
+    const FB_READY = !!window.FIREBASE_READY;
+    const auth = window.fbAuth || null;
+    const db = window.fbDb || null;
+
+    // ===== LocalStorage fallback (used if Firebase not configured) =====
     const STORE_USERS = 'mcb.users';
     const STORE_SESSION = 'mcb.session';
     const STORE_OVERRIDES = 'mcb.businesses';
 
-    // ===== Auth (localStorage based; not real security) =====
-    function getUsers() {
-        try { return JSON.parse(localStorage.getItem(STORE_USERS) || '{}'); } catch { return {}; }
-    }
+    function getUsers() { try { return JSON.parse(localStorage.getItem(STORE_USERS) || '{}'); } catch { return {}; } }
     function saveUsers(u) { localStorage.setItem(STORE_USERS, JSON.stringify(u)); }
-
     function hashPassword(pw) {
-        // Simple non-cryptographic hash. Good enough for "is this the same password they typed before?"
-        // Real auth requires a backend. For free-static-site this is the best we can do.
         let h = 5381;
         for (let i = 0; i < pw.length; i++) h = ((h << 5) + h) ^ pw.charCodeAt(i);
         return (h >>> 0).toString(36);
     }
 
-    // "Remember me" determines storage:
-    //   - true  -> localStorage (persists forever)
-    //   - false -> sessionStorage (clears when browser closes)
+    // ===== Session =====
+    // With Firebase: tracks auth.currentUser. With fallback: tracks localStorage/sessionStorage.
+    let currentUser = null; // { uid, email, name } when logged in
+    const authListeners = [];
+
+    function onAuthChange(cb) { authListeners.push(cb); cb(currentUser); }
+    function fireAuthChange() { authListeners.forEach(cb => { try { cb(currentUser); } catch {} }); }
+
     function getSession() {
+        if (currentUser) return currentUser.name || currentUser.email || null;
+        if (FB_READY) return null; // not logged in
+        // Fallback mode
         return localStorage.getItem(STORE_SESSION) || sessionStorage.getItem(STORE_SESSION);
     }
-    function setSession(name, remember) {
-        if (remember) {
-            localStorage.setItem(STORE_SESSION, name);
-            sessionStorage.removeItem(STORE_SESSION);
-        } else {
-            sessionStorage.setItem(STORE_SESSION, name);
-            localStorage.removeItem(STORE_SESSION);
-        }
+    function getSessionUid() { return currentUser ? currentUser.uid : (getSession() || null); }
+    function setSessionFallback(name, remember) {
+        if (remember) { localStorage.setItem(STORE_SESSION, name); sessionStorage.removeItem(STORE_SESSION); }
+        else { sessionStorage.setItem(STORE_SESSION, name); localStorage.removeItem(STORE_SESSION); }
     }
-    function clearSession() {
-        localStorage.removeItem(STORE_SESSION);
-        sessionStorage.removeItem(STORE_SESSION);
+    function clearSessionFallback() {
+        localStorage.removeItem(STORE_SESSION); sessionStorage.removeItem(STORE_SESSION);
     }
-    function getLastUsername() {
-        return localStorage.getItem('mcb.lastUser') || '';
-    }
-    function setLastUsername(name) {
-        localStorage.setItem('mcb.lastUser', name);
+    function getLastUsername() { return localStorage.getItem('mcb.lastUser') || ''; }
+    function setLastUsername(name) { localStorage.setItem('mcb.lastUser', name); }
+
+    // Subscribe to Firebase auth state
+    if (FB_READY) {
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                currentUser = { uid: user.uid, email: user.email, name: user.displayName || user.email };
+                setLastUsername(user.email);
+            } else {
+                currentUser = null;
+            }
+            fireAuthChange();
+            applyLoginGate();
+            renderAuthArea();
+        });
     }
 
-    // Find a user by username OR email (login accepts either)
-    function findUserKey(users, identifier) {
-        identifier = (identifier || '').trim().toLowerCase();
-        if (!identifier) return null;
-        for (const key of Object.keys(users)) {
-            if (key.toLowerCase() === identifier) return key;
-            if ((users[key].email || '').toLowerCase() === identifier) return key;
-        }
-        return null;
-    }
+    // ===== Login / Signup / Logout / Forgot =====
+    async function loginOnly(identifier, password, remember) {
+        if (!identifier || !password) return 'Enter email and password.';
+        identifier = identifier.trim();
 
-    function loginOnly(identifier, password, remember) {
-        if (!identifier || !password) return 'Enter username/email and password.';
+        if (FB_READY) {
+            try {
+                // Remember = local persistence; otherwise session-only
+                await auth.setPersistence(remember
+                    ? firebase.auth.Auth.Persistence.LOCAL
+                    : firebase.auth.Auth.Persistence.SESSION);
+                await auth.signInWithEmailAndPassword(identifier, password);
+                return null;
+            } catch (e) {
+                return prettyAuthError(e);
+            }
+        }
+        // Fallback
         const users = getUsers();
-        const key = findUserKey(users, identifier);
+        const key = Object.keys(users).find(k => k.toLowerCase() === identifier.toLowerCase()
+            || (users[k].email || '').toLowerCase() === identifier.toLowerCase());
         if (!key) return 'No account with that username/email. Sign up first.';
         if (users[key].passHash !== hashPassword(password)) return 'Wrong password.';
-        users[key].lastLogin = new Date().toISOString();
-        saveUsers(users);
-        setSession(key, remember !== false);
+        setSessionFallback(key, remember !== false);
         setLastUsername(key);
         return null;
     }
 
-    function registerOnly(username, email, password, password2, remember) {
+    async function registerOnly(username, email, password, password2, remember) {
         username = (username || '').trim();
         email = (email || '').trim();
         if (!username || username.length < 2 || username.length > 32) return 'Username must be 2-32 chars.';
         if (!/^[A-Za-z0-9_.-]+$/.test(username)) return 'Username: letters, digits, _ . - only.';
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Valid email required.';
-        if (!password || password.length < 4) return 'Password must be 4+ characters.';
+        if (!password || password.length < 6) return 'Password must be 6+ characters.';
         if (password !== password2) return 'Passwords do not match.';
 
+        if (FB_READY) {
+            try {
+                await auth.setPersistence(remember
+                    ? firebase.auth.Auth.Persistence.LOCAL
+                    : firebase.auth.Auth.Persistence.SESSION);
+                const cred = await auth.createUserWithEmailAndPassword(email, password);
+                await cred.user.updateProfile({ displayName: username });
+                // Save username→uid lookup so usernames are unique-ish + queryable
+                await db.collection('usernames').doc(username.toLowerCase()).set({
+                    uid: cred.user.uid, username, createdAt: new Date().toISOString()
+                });
+                // Force currentUser refresh
+                currentUser = { uid: cred.user.uid, email: cred.user.email, name: username };
+                fireAuthChange();
+                return null;
+            } catch (e) {
+                return prettyAuthError(e);
+            }
+        }
+        // Fallback
         const users = getUsers();
-        if (findUserKey(users, username)) return 'Username already taken.';
-        if (findUserKey(users, email)) return 'Email already registered.';
-
+        if (users[username]) return 'Username already taken.';
         users[username] = {
-            email,
-            passHash: hashPassword(password),
+            email, passHash: hashPassword(password),
             registeredAt: new Date().toISOString(),
             lastLogin: new Date().toISOString()
         };
         saveUsers(users);
-        setSession(username, remember !== false);
+        setSessionFallback(username, remember !== false);
         setLastUsername(username);
         return null;
     }
 
-    // Sends an actual email to isaac.huq@gmail.com via EmailJS (no backend needed).
-    // Returns a Promise<string|null> — null on success, error string on failure.
-    async function forgotPassword(identifier) {
-        identifier = (identifier || '').trim();
-        const users = getUsers();
-        const key = identifier ? findUserKey(users, identifier) : null;
-        const knownEmail = key ? (users[key].email || '') : '';
+    async function logout() {
+        if (FB_READY) { try { await auth.signOut(); } catch {} }
+        clearSessionFallback();
+        location.reload();
+    }
 
-        const cfg = window.EMAILJS_CONFIG || {};
-        const configured = cfg.PUBLIC_KEY && cfg.PUBLIC_KEY !== 'YOUR_PUBLIC_KEY_HERE'
-            && cfg.SERVICE_ID && cfg.TEMPLATE_ID;
-
-        // Fallback: open mailto if EmailJS isn't configured yet
-        if (!configured || !window.emailjs) {
-            const subject = encodeURIComponent('MC Businesses — Password reset request');
-            const body = encodeURIComponent(
-                'Username/email tried: ' + (identifier || '(not entered)') + '\n' +
-                (knownEmail ? 'Email on file: ' + knownEmail + '\n' : '') +
-                'Browser: ' + navigator.userAgent + '\n' +
-                'Time: ' + new Date().toISOString()
-            );
-            window.location.href = 'mailto:' + (cfg.TO_EMAIL || 'isaac.huq@gmail.com') +
-                '?subject=' + subject + '&body=' + body;
-            return null;
+    // Forgot password — uses Firebase's built-in email sender (auto, no EmailJS).
+    // Returns null on success, error string on failure.
+    async function forgotPassword(email) {
+        email = (email || '').trim();
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return 'Enter your email address above first, then click "Forgot my password".';
         }
-
-        const params = {
-            to_email: cfg.TO_EMAIL || 'isaac.huq@gmail.com',
-            identifier: identifier || '(not entered)',
-            email_on_file: knownEmail || '(unknown)',
-            user_agent: navigator.userAgent,
-            time: new Date().toISOString(),
-            message:
-                'Password reset request for MC Server Businesses\n' +
-                'Username/email tried: ' + (identifier || '(not entered)') + '\n' +
-                'Email on file: ' + (knownEmail || '(unknown)') + '\n' +
-                'Browser: ' + navigator.userAgent + '\n' +
-                'Time: ' + new Date().toISOString()
-        };
-
+        if (!FB_READY) return 'Password reset requires Firebase setup. See README.';
         try {
-            await emailjs.send(cfg.SERVICE_ID, cfg.TEMPLATE_ID, params);
+            await auth.sendPasswordResetEmail(email);
             return null;
         } catch (e) {
-            return 'Could not send email: ' + (e && e.text ? e.text : e);
+            return prettyAuthError(e);
         }
     }
 
-    // ===== Business data =====
+    function prettyAuthError(e) {
+        const code = e && e.code || '';
+        const map = {
+            'auth/email-already-in-use': 'An account already exists with that email.',
+            'auth/invalid-email': 'That email looks invalid.',
+            'auth/weak-password': 'Password too weak (6+ characters).',
+            'auth/user-not-found': 'No account with that email.',
+            'auth/wrong-password': 'Wrong password.',
+            'auth/invalid-credential': 'Wrong email or password.',
+            'auth/too-many-requests': 'Too many attempts. Try again in a minute.',
+            'auth/network-request-failed': 'Network error — check your connection.'
+        };
+        return map[code] || (e && e.message) || 'Something went wrong.';
+    }
+
+    // ===== Business data (Firestore + JSON seed fallback) =====
     let cachedAll = null;
     async function loadAllBusinesses() {
         if (cachedAll) return cachedAll;
-        const res = await fetch('businesses.json');
-        const data = await res.json();
-        const base = data.businesses || [];
 
-        // Merge with localStorage overrides (new businesses or new purchases by users)
+        if (FB_READY) {
+            try {
+                const snap = await db.collection('businesses').get();
+                const cloud = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                if (cloud.length > 0) { cachedAll = cloud; return cloud; }
+                // Empty Firestore → seed it from businesses.json
+                const seed = await loadSeed();
+                await Promise.all(seed.map(b => db.collection('businesses').doc(b.id).set(b)));
+                cachedAll = seed;
+                return seed;
+            } catch (e) {
+                console.error('Firestore load failed, falling back to local:', e);
+            }
+        }
+
+        // Fallback: JSON + localStorage overrides (legacy mode)
+        const seed = await loadSeed();
         const overrides = getOverrides();
         const map = new Map();
-        for (const b of base) map.set(b.id, JSON.parse(JSON.stringify(b)));
+        for (const b of seed) map.set(b.id, JSON.parse(JSON.stringify(b)));
         for (const ov of overrides) {
             if (map.has(ov.id)) {
-                // Merge purchases
                 const existing = map.get(ov.id);
                 const seen = new Set(existing.purchases.map(p => p.date + p.buyer + p.item));
                 for (const p of (ov.purchases || [])) {
@@ -177,34 +215,50 @@
         return cachedAll;
     }
 
-    function getOverrides() {
-        try { return JSON.parse(localStorage.getItem(STORE_OVERRIDES) || '[]'); } catch { return []; }
-    }
-    function saveOverrides(arr) {
-        localStorage.setItem(STORE_OVERRIDES, JSON.stringify(arr));
-        cachedAll = null;
+    async function loadSeed() {
+        try {
+            const res = await fetch('businesses.json');
+            const data = await res.json();
+            return data.businesses || [];
+        } catch { return []; }
     }
 
-    function upsertOverride(business) {
+    function getOverrides() { try { return JSON.parse(localStorage.getItem(STORE_OVERRIDES) || '[]'); } catch { return []; } }
+    function saveOverrides(arr) { localStorage.setItem(STORE_OVERRIDES, JSON.stringify(arr)); cachedAll = null; }
+
+    async function upsertOverride(business) {
+        if (FB_READY) {
+            try {
+                await db.collection('businesses').doc(business.id).set(business, { merge: true });
+                cachedAll = null;
+                return;
+            } catch (e) { console.error('Firestore write failed:', e); }
+        }
         const arr = getOverrides();
         const idx = arr.findIndex(b => b.id === business.id);
         if (idx >= 0) arr[idx] = business; else arr.push(business);
         saveOverrides(arr);
     }
 
-    function logPurchase(businessId, purchase) {
+    async function logPurchase(businessId, purchase) {
+        if (FB_READY) {
+            try {
+                await db.collection('businesses').doc(businessId).update({
+                    purchases: firebase.firestore.FieldValue.arrayUnion(purchase)
+                });
+                cachedAll = null;
+                return;
+            } catch (e) { console.error('Firestore purchase write failed:', e); }
+        }
         const arr = getOverrides();
         let entry = arr.find(b => b.id === businessId);
-        if (!entry) {
-            entry = { id: businessId, purchases: [] };
-            arr.push(entry);
-        }
+        if (!entry) { entry = { id: businessId, purchases: [] }; arr.push(entry); }
         entry.purchases = entry.purchases || [];
         entry.purchases.push(purchase);
         saveOverrides(arr);
     }
 
-    // ===== UI: Auth area =====
+    // ===== UI =====
     function renderAuthArea() {
         const el = document.getElementById('authArea');
         if (!el) return;
@@ -212,9 +266,8 @@
         if (session) {
             el.innerHTML = `
                 <span class="auth-name">@${escape(session)}</span>
-                <button id="logoutBtn">Log out</button>
-            `;
-            document.getElementById('logoutBtn').onclick = () => { clearSession(); location.reload(); };
+                <button id="logoutBtn">Log out</button>`;
+            document.getElementById('logoutBtn').onclick = logout;
         } else {
             el.innerHTML = `<button id="loginOpenBtn" class="primary">Log in / Sign up</button>`;
             document.getElementById('loginOpenBtn').onclick = openLogin;
@@ -239,14 +292,13 @@
         return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
     }
 
-    // Wire login modal buttons (if present on this page)
     function wireLoginModal() {
         const loginBtn = document.getElementById('loginBtn');
         if (loginBtn) {
-            loginBtn.onclick = () => {
+            loginBtn.onclick = async () => {
                 const user = document.getElementById('loginUser').value;
                 const pass = document.getElementById('loginPass').value;
-                const err = loginOnly(user, pass, true);
+                const err = await loginOnly(user, pass, true);
                 if (err) document.getElementById('loginError').textContent = err;
                 else { closeLogin(); location.reload(); }
             };
@@ -258,26 +310,20 @@
             });
         }
     }
-    // ===== Login gate (full-page) =====
+
     function applyLoginGate() {
         const gate = document.getElementById('loginGate');
         const main = document.getElementById('appMain');
         if (!gate || !main) return;
-        const session = getSession();
-        if (session) {
-            gate.style.display = 'none';
-            main.hidden = false;
-        } else {
-            gate.style.display = 'flex';
-            main.hidden = true;
-        }
+        if (getSession()) { gate.style.display = 'none'; main.hidden = false; }
+        else { gate.style.display = 'flex'; main.hidden = true; }
     }
 
     function wireLoginGate() {
         const gate = document.getElementById('loginGate');
         if (!gate) return;
 
-        // ----- Tab switching -----
+        // Tabs
         const tabs = gate.querySelectorAll('.tab');
         const panes = gate.querySelectorAll('.tab-pane');
         tabs.forEach(t => {
@@ -288,7 +334,7 @@
             };
         });
 
-        // ----- LOGIN -----
+        // LOGIN
         const userInput = document.getElementById('gateUser');
         const passInput = document.getElementById('gatePass');
         const rememberCb = document.getElementById('gateRemember');
@@ -298,9 +344,11 @@
         const last = getLastUsername();
         if (last) { userInput.value = last; passInput.focus(); } else { userInput.focus(); }
 
-        const doLogin = () => {
+        const doLogin = async () => {
             errEl.textContent = '';
-            const err = loginOnly(userInput.value, passInput.value, rememberCb.checked);
+            loginBtn.disabled = true;
+            const err = await loginOnly(userInput.value, passInput.value, rememberCb.checked);
+            loginBtn.disabled = false;
             if (err) { errEl.textContent = err; return; }
             applyLoginGate();
             renderAuthArea();
@@ -310,20 +358,20 @@
         [userInput, passInput].forEach(el =>
             el.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); }));
 
-        // ----- Forgot password -----
+        // FORGOT PASSWORD
         const forgot = document.getElementById('forgotLink');
         if (forgot) {
             forgot.onclick = async (e) => {
                 e.preventDefault();
-                errEl.textContent = 'Sending...';
+                errEl.textContent = 'Sending reset email...';
                 const err = await forgotPassword(userInput.value);
                 errEl.textContent = err
                     ? err
-                    : '✓ Reset request sent to the admin. You\'ll get a reply soon.';
+                    : '✓ Reset email sent! Check your inbox (and spam folder).';
             };
         }
 
-        // ----- SIGNUP -----
+        // SIGNUP
         const suUser = document.getElementById('suUser');
         const suEmail = document.getElementById('suEmail');
         const suPass = document.getElementById('suPass');
@@ -332,9 +380,11 @@
         const suError = document.getElementById('suError');
         const signupBtn = document.getElementById('gateSignupBtn');
         if (signupBtn) {
-            const doSignup = () => {
+            const doSignup = async () => {
                 suError.textContent = '';
-                const err = registerOnly(suUser.value, suEmail.value, suPass.value, suPass2.value, suRemember.checked);
+                signupBtn.disabled = true;
+                const err = await registerOnly(suUser.value, suEmail.value, suPass.value, suPass2.value, suRemember.checked);
+                signupBtn.disabled = false;
                 if (err) { suError.textContent = err; return; }
                 applyLoginGate();
                 renderAuthArea();
@@ -346,9 +396,6 @@
         }
     }
 
-    // Run gate immediately (script is at end of body, so DOM is ready).
-    // Using addEventListener is unreliable here because DOMContentLoaded may
-    // have already fired by the time the listener is registered.
     function bootGate() {
         applyLoginGate();
         wireLoginGate();
@@ -360,15 +407,17 @@
         bootGate();
     }
 
-    // Expose globally for other scripts
+    // Public API
     window.MCB = {
         loadAllBusinesses,
         getSession,
+        getSessionUid,
         upsertOverride,
         logPurchase,
         getOverrides,
         renderAuthArea,
         openLogin,
+        onAuthChange,
         escape,
     };
 
@@ -402,7 +451,7 @@
         const filtered = businesses.filter(b => {
             if (cat && b.category !== cat) return false;
             if (!q) return true;
-            return (b.name + ' ' + b.owner + ' ' + (b.category || '') + ' ' + (b.description || '')).toLowerCase().includes(q);
+            return (b.name + ' ' + b.owner + ' ' + (b.ownerName || '') + ' ' + (b.category || '') + ' ' + (b.description || '')).toLowerCase().includes(q);
         });
         grid.innerHTML = filtered.length === 0
             ? `<p class="muted">No businesses match.</p>`
@@ -413,10 +462,11 @@
         const totalSales = (b.purchases || []).reduce((s, p) => s + (p.totalPrice || 0), 0);
         const totalItems = (b.purchases || []).reduce((s, p) => s + (p.quantity || 0), 0);
         const unit = b.baseCurrency || 'iron';
+        const ownerLabel = b.ownerName || b.owner || '?';
         return `
             <a href="business.html?id=${encodeURIComponent(b.id)}" class="biz-card-link">
               <h3>${escape(b.name)}</h3>
-              <div class="biz-owner">@${escape(b.owner)}</div>
+              <div class="biz-owner">@${escape(ownerLabel)}</div>
               <div class="biz-cat">${escape(b.category || 'Other')}</div>
               <div style="margin-top:10px">${escape(b.description || '')}</div>
               <div class="biz-stats">📦 ${totalItems} items sold · 💰 ${totalSales} ${unit}</div>
@@ -429,11 +479,13 @@
     }
 
     function renderOwnerPanel(businesses) {
-        const session = getSession();
         const panel = document.getElementById('ownerPanel');
         if (!panel) return;
-        if (!session) { panel.hidden = true; return; }
-        const myBiz = businesses.filter(b => b.owner === session);
+        const uid = getSessionUid();
+        const name = getSession();
+        if (!uid && !name) { panel.hidden = true; return; }
+        const myBiz = businesses.filter(b =>
+            (uid && b.owner === uid) || (name && (b.owner === name || b.ownerName === name)));
         panel.hidden = false;
         const list = document.getElementById('ownerBusinesses');
         if (myBiz.length === 0) {
@@ -443,8 +495,7 @@
                 <div class="owner-biz">
                     <div><strong>${escape(b.name)}</strong> · ${escape(b.category)} · ${(b.purchases || []).length} purchases</div>
                     <a href="business.html?id=${encodeURIComponent(b.id)}" class="button">Manage</a>
-                </div>
-            `).join('');
+                </div>`).join('');
         }
     }
 
@@ -452,13 +503,12 @@
         const newBtn = document.getElementById('newBusinessBtn');
         if (!newBtn) return;
         newBtn.onclick = () => {
-            const session = getSession();
-            if (!session) { openLogin(); return; }
+            if (!getSession()) { openLogin(); return; }
             document.getElementById('newBusinessModal').hidden = false;
         };
         document.getElementById('bizCancel').onclick = () =>
             document.getElementById('newBusinessModal').hidden = true;
-        document.getElementById('bizSave').onclick = () => {
+        document.getElementById('bizSave').onclick = async () => {
             const name = document.getElementById('bizName').value.trim();
             const category = document.getElementById('bizCategory').value;
             const baseCurrency = document.getElementById('bizCurrency').value;
@@ -467,12 +517,16 @@
             const errEl = document.getElementById('bizError');
             if (!name) { errEl.textContent = 'Name required.'; return; }
             const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-            const owner = getSession();
+            const ownerUid = getSessionUid();
+            const ownerName = getSession();
             const newBiz = {
-                id, name, owner, category, baseCurrency, description,
+                id, name,
+                owner: ownerUid || ownerName,
+                ownerName,
+                category, baseCurrency, description,
                 investmentRate, founded: new Date().toISOString().slice(0, 10), purchases: []
             };
-            upsertOverride(newBiz);
+            await upsertOverride(newBiz);
             location.href = `business.html?id=${encodeURIComponent(id)}`;
         };
     }

@@ -1,76 +1,99 @@
 # MC Server Businesses
 
-A static website (free, hosted on GitHub Pages) that catalogs Minecraft server businesses, their purchase logs, and projects investment growth in iron/diamond/etc.
+Static website cataloging Minecraft server businesses, purchase ledgers, and reinvestment growth projections. Backed by **Firebase** for real cross-device accounts + cloud-synced data, hosted on **Cloudflare Pages** (free, supports private repos).
 
 ## Features
 
-- 🔍 **Search** businesses by name, owner, category, or keyword
-- 📊 **Portfolio pages** for each business — stats, ledger, growth chart
-- 💰 **Purchase ledger** — businesses log who bought what and the price
-- 📈 **Investment projection** — see what 1, 8, 32 iron/diamonds become if reinvested
-- 👤 **Login system** — register and log into your business owner account
-- ✏️ **Owner controls** — log purchases directly through the site once logged in
+- 🔍 Search businesses by name, owner, category
+- 📊 Per-business portfolio (stats, ledger, growth chart)
+- 💰 Purchase ledger
+- 📈 Compound-interest investment projection
+- 👤 Real Firebase email/password accounts (cross-device, real password resets)
+- ✏️ Owner-only purchase logging
+- ☁️ Firestore-backed data (everyone sees the same businesses)
 
-## Login system (heads up)
+---
 
-Because GitHub Pages is **static-only** (no server, no database), accounts are stored in your browser's localStorage. That means:
+## 🔥 Firebase setup (5 minutes, one time)
 
-- Your account works on the device/browser you create it on
-- Logging out and back in works
-- Switching browsers = needs to re-register
-- This is "fake but useful" auth — fine for a Minecraft community tool
+1. Go to https://console.firebase.google.com → **Add project** → name it `mc-businesses` → disable Analytics → Create.
+2. In the project, click the **Web** icon (`</>`) to add a web app → nickname `mc-businesses-web` → **Register app** (don't enable hosting).
+3. You'll see a `firebaseConfig` block. Copy the values into **`firebase-config.js`** in this repo.
+4. Left sidebar → **Build → Authentication → Get started** → enable **Email/Password** sign-in.
+5. Left sidebar → **Build → Firestore Database → Create database** → Production mode → pick a region → Done.
+6. Firestore → **Rules** tab → paste this and Publish:
 
-**Want real cross-device accounts?** Plug in [Firebase Authentication](https://firebase.google.com/docs/auth) (free tier) — it's a 30-line drop-in replacement for the auth functions in `app.js`. Open an issue and I'll wire it up.
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       // Anyone signed in can read businesses; only the owner can write/update
+       match /businesses/{bizId} {
+         allow read: if true;
+         allow create: if request.auth != null
+                       && request.resource.data.owner == request.auth.uid;
+         allow update, delete: if request.auth != null
+                       && resource.data.owner == request.auth.uid;
+       }
+       // Username uniqueness lookup
+       match /usernames/{name} {
+         allow read: if true;
+         allow create: if request.auth != null
+                       && request.resource.data.uid == request.auth.uid;
+       }
+     }
+   }
+   ```
 
-## Adding a business permanently
+7. Authentication → **Templates** tab → "Password reset" → optionally customize the from-name. Firebase auto-sends these emails when a user clicks "Forgot my password" — no setup needed.
 
-Owners can register businesses through the site (saved to localStorage). To make a business **public for everyone**, edit `businesses.json` directly via GitHub's web editor and commit:
+That's it. Reload the site, sign up, and you have real cross-device accounts.
 
-```json
-{
-  "id": "my-shop",
-  "name": "My Shop",
-  "owner": "MyMinecraftName",
-  "founded": "2026-04-19",
-  "category": "Materials",
-  "description": "What I sell.",
-  "baseCurrency": "diamond",
-  "investmentRate": 0.05,
-  "purchases": []
-}
+> The values in `firebase-config.js` are **safe to commit publicly**. Security comes from the Firestore rules above, not from hiding the config.
+
+---
+
+## ☁️ Hosting on Cloudflare Pages (private repo, public site, free)
+
+GitHub Pages requires a Pro plan ($4/mo) to publish a private repo. Cloudflare Pages does it free.
+
+1. Make the GitHub repo private: GitHub → repo → Settings → bottom → "Change visibility" → Private.
+2. Go to https://dash.cloudflare.com → **Workers & Pages** → **Create application** → **Pages** → **Connect to Git**.
+3. Authorize Cloudflare to read your private repo, pick `mc-businesses`.
+4. Build settings:
+   - Framework preset: **None**
+   - Build command: *(leave empty)*
+   - Build output directory: `/`
+5. Save and Deploy. You get a public URL like `https://mc-businesses.pages.dev`.
+6. Every `git push` auto-redeploys in ~30 seconds.
+
+Optional: add a custom domain under Pages → Custom domains.
+
+---
+
+## Local dev
+
+```bash
+python -m http.server 8000
+# open http://localhost:8000
 ```
 
-## Repo layout
+For Firebase to work locally, your localhost domain is auto-allowed in Auth → Settings → Authorized domains.
+
+## Files
 
 ```
 mc-businesses/
-├── index.html         Search + business cards
-├── business.html      Single business portfolio
-├── styles.css         Theme
-├── app.js             Login, search, business list
-├── business.js        Business detail page logic
-├── businesses.json    Public business directory data
-└── README.md          (this file)
+├── index.html            Search + business cards
+├── business.html         Single business portfolio
+├── styles.css            Theme
+├── app.js                Auth + business loading (Firebase-backed)
+├── business.js           Business detail page logic
+├── businesses.json       Seed data (auto-uploaded to Firestore on first run)
+├── firebase-config.js    YOUR Firebase project keys (edit this)
+└── README.md
 ```
 
-## Run locally
+## Fallback mode
 
-Static site, no build step:
-
-```bash
-# Just serve the folder with anything that hosts files
-python -m http.server 8000
-# then open http://localhost:8000
-```
-
-## Deploy
-
-Already deployed on GitHub Pages. To redeploy after edits:
-
-```bash
-git add .
-git commit -m "update"
-git push
-```
-
-Pages auto-rebuilds in ~30 seconds.
+If `firebase-config.js` isn't filled in, the site falls back to localStorage-only mode (per-browser accounts, mailto password reset). Useful for offline tinkering.

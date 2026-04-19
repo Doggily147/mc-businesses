@@ -21,7 +21,7 @@
 
     <!-- LOGIN form -->
     <div class="tab-pane" data-pane="login">
-      <input id="gateUser" type="text" placeholder="Username or email" maxlength="40" autocomplete="username">
+      <input id="gateUser" type="email" placeholder="Email" maxlength="80" autocomplete="email">
       <input id="gatePass" type="password" placeholder="Password" maxlength="60" autocomplete="current-password">
       <label class="remember">
         <input type="checkbox" id="gateRemember" checked>
@@ -141,9 +141,11 @@
   </div>
 </div>
 
-<!-- EmailJS for forgot-password emails -->
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<script src="emailjs-config.js"></script>
+<!-- Firebase (compat SDK — works with plain <script> tags) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
