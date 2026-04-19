@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Business Portfolio</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <a href="index.html" class="back">←</a>
+    <div>
+      <h1 id="bizName">Loading...</h1>
+      <div class="tag" id="bizMeta"></div>
+    </div>
+  </div>
+  <div class="auth-area" id="authArea"></div>
+</header>
+
+<main class="biz-main">
+
+  <section class="biz-card" id="bizInfo">
+    <p id="bizDescription" class="muted"></p>
+  </section>
+
+  <section class="stats">
+    <div class="stat-card">
+      <div class="stat-label">Total revenue</div>
+      <div class="stat-val" id="totalRevenue">—</div>
+      <div class="stat-sub" id="totalRevenueSub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Items sold</div>
+      <div class="stat-val" id="totalItems">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Customers</div>
+      <div class="stat-val" id="totalCustomers">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Weekly growth</div>
+      <div class="stat-val" id="growthRate">—</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>📈 Investment projection</h2>
+    <p class="muted">If a customer reinvests their purchase here, this is what it could become.</p>
+    <div class="row" style="margin-top:8px">
+      <input type="number" id="investAmount" min="1" value="8" style="width:100px">
+      <select id="investUnit">
+        <option value="iron">iron</option>
+        <option value="diamond" selected>diamond</option>
+        <option value="emerald">emerald</option>
+        <option value="gold">gold</option>
+      </select>
+      <span class="muted">→ growth over time @ <span id="investRateLabel">—</span> /week</span>
+    </div>
+    <canvas id="growthChart" height="100"></canvas>
+    <div class="growth-table" id="growthTable"></div>
+  </section>
+
+  <section class="card">
+    <h2>🧾 Purchase history</h2>
+    <div id="purchaseControls" class="row" style="margin-bottom:8px" hidden>
+      <button id="addPurchaseBtn" class="primary">+ Log a purchase</button>
+    </div>
+    <table id="purchasesTable" class="ledger">
+      <thead><tr><th>Date</th><th>Buyer</th><th>Item</th><th>Qty</th><th>Price</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+</main>
+
+<!-- Add purchase modal -->
+<div class="modal-bg" id="purchaseModal" hidden>
+  <div class="modal">
+    <h2>Log a purchase</h2>
+    <input id="pBuyer" type="text" placeholder="Buyer's username">
+    <input id="pItem" type="text" placeholder="Item (e.g. iron_ingot, tnt, tamed_wolf)">
+    <input id="pQty" type="number" min="1" value="1" placeholder="Quantity">
+    <input id="pPrice" type="number" min="0" step="0.5" placeholder="Total price">
+    <select id="pUnit">
+      <option value="iron">iron</option>
+      <option value="diamond">diamond</option>
+      <option value="emerald">emerald</option>
+      <option value="gold">gold</option>
+      <option value="netherite">netherite</option>
+    </select>
+    <div class="row">
+      <button id="pSave" class="primary">Log purchase</button>
+      <button id="pCancel">Cancel</button>
+    </div>
+    <p id="pError" class="error"></p>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script src="business.js"></script>
+</body>
+</html>

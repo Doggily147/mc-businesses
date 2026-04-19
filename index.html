@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MC Server Businesses — Portfolio Directory</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">⛏️</div>
+    <div>
+      <h1>MC Server Businesses</h1>
+      <div class="tag">Portfolio directory · Purchase ledger · Investment projections</div>
+    </div>
+  </div>
+  <div class="auth-area" id="authArea"></div>
+</header>
+
+<main>
+  <section class="search">
+    <input id="searchInput" type="text" placeholder="🔍 Search businesses, owners, categories...">
+    <select id="categoryFilter">
+      <option value="">All categories</option>
+    </select>
+  </section>
+
+  <section id="ownerPanel" class="owner-panel" hidden>
+    <h2>Your dashboard</h2>
+    <div id="ownerBusinesses"></div>
+    <button id="newBusinessBtn" class="primary">+ Register a new business</button>
+  </section>
+
+  <section class="businesses">
+    <h2>All businesses</h2>
+    <div id="businessGrid" class="grid"></div>
+  </section>
+</main>
+
+<footer>
+  <p>Built on GitHub Pages · Data: <a href="businesses.json" target="_blank">businesses.json</a> ·
+     Suggest an edit by opening a PR on the repo</p>
+</footer>
+
+<!-- Login modal -->
+<div class="modal-bg" id="loginModal" hidden>
+  <div class="modal">
+    <h2 id="loginTitle">Log in</h2>
+    <p class="muted">Enter your Minecraft username + a 4+ char password.<br>
+    First login auto-registers an account (saved to your browser).</p>
+    <input id="loginUser" type="text" placeholder="Minecraft username" maxlength="16">
+    <input id="loginPass" type="password" placeholder="Password" maxlength="40">
+    <div class="row">
+      <button id="loginBtn" class="primary">Log in / Register</button>
+      <button id="loginCancel">Cancel</button>
+    </div>
+    <p id="loginError" class="error"></p>
+  </div>
+</div>
+
+<!-- New business modal -->
+<div class="modal-bg" id="newBusinessModal" hidden>
+  <div class="modal">
+    <h2>Register a new business</h2>
+    <input id="bizName" type="text" placeholder="Business name (e.g. Spawn Iron Shop)">
+    <select id="bizCategory">
+      <option>Materials</option>
+      <option>Animals</option>
+      <option>Food</option>
+      <option>Explosives</option>
+      <option>Tools</option>
+      <option>Building</option>
+      <option>Magic</option>
+      <option>Services</option>
+      <option>Other</option>
+    </select>
+    <select id="bizCurrency">
+      <option value="iron">Iron</option>
+      <option value="diamond">Diamond</option>
+      <option value="emerald">Emerald</option>
+      <option value="gold">Gold</option>
+      <option value="netherite">Netherite</option>
+    </select>
+    <textarea id="bizDescription" placeholder="Description" rows="3"></textarea>
+    <input id="bizRate" type="number" step="0.01" min="0" max="1" placeholder="Weekly investment rate (e.g. 0.05 for 5%)">
+    <div class="row">
+      <button id="bizSave" class="primary">Create</button>
+      <button id="bizCancel">Cancel</button>
+    </div>
+    <p id="bizError" class="error"></p>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

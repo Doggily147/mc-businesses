@@ -1,0 +1,47 @@
+{
+  "$schema_help": "Each business: id (slug), name, owner, founded (YYYY-MM-DD), description, category, baseCurrency (iron|diamond|emerald|gold), purchases (transactions), investmentRate (decimal weekly growth, e.g. 0.05 = 5%/week)",
+  "businesses": [
+    {
+      "id": "spawn-iron-shop",
+      "name": "Spawn Iron Shop",
+      "owner": "Doggily147",
+      "founded": "2026-01-15",
+      "category": "Materials",
+      "description": "Best iron prices at spawn. Bulk discounts on stacks of 32+.",
+      "baseCurrency": "diamond",
+      "investmentRate": 0.04,
+      "purchases": [
+        { "date": "2026-04-10", "buyer": "leofart", "item": "iron_ingot", "quantity": 16, "totalPrice": 4, "priceUnit": "diamond" },
+        { "date": "2026-04-12", "buyer": "Waterhelixz", "item": "iron_ingot", "quantity": 32, "totalPrice": 7, "priceUnit": "diamond" },
+        { "date": "2026-04-15", "buyer": "JeniJuju", "item": "iron_block", "quantity": 4, "totalPrice": 9, "priceUnit": "diamond" }
+      ]
+    },
+    {
+      "id": "dempseys-pet-store",
+      "name": "Dempsey's Pet Store",
+      "owner": "DempseysNemisis",
+      "founded": "2026-03-01",
+      "category": "Animals",
+      "description": "Wolves, cats, parrots, axolotls — all tamed and ready to take home.",
+      "baseCurrency": "iron",
+      "investmentRate": 0.03,
+      "purchases": [
+        { "date": "2026-04-08", "buyer": "Buniduo", "item": "tamed_wolf", "quantity": 1, "totalPrice": 12, "priceUnit": "iron" },
+        { "date": "2026-04-14", "buyer": "demonchapter2000", "item": "axolotl", "quantity": 2, "totalPrice": 18, "priceUnit": "iron" }
+      ]
+    },
+    {
+      "id": "leos-tnt-emporium",
+      "name": "Leo's TNT Emporium",
+      "owner": "leofart",
+      "founded": "2026-02-20",
+      "category": "Explosives",
+      "description": "Bulk TNT for all your terraforming needs. Custom dispensers built on request.",
+      "baseCurrency": "iron",
+      "investmentRate": 0.06,
+      "purchases": [
+        { "date": "2026-04-13", "buyer": "aussieboi22", "item": "tnt", "quantity": 64, "totalPrice": 32, "priceUnit": "iron" }
+      ]
+    }
+  ]
+}
