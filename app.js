@@ -187,9 +187,6 @@
             });
         }
     }
-    // Auto-wire on every page load
-    document.addEventListener('DOMContentLoaded', wireLoginModal);
-
     // ===== Login gate (full-page) =====
     function applyLoginGate() {
         const gate = document.getElementById('loginGate');
@@ -243,11 +240,19 @@
         });
     }
 
-    // Run gate on every page load BEFORE other logic
-    document.addEventListener('DOMContentLoaded', () => {
+    // Run gate immediately (script is at end of body, so DOM is ready).
+    // Using addEventListener is unreliable here because DOMContentLoaded may
+    // have already fired by the time the listener is registered.
+    function bootGate() {
         applyLoginGate();
         wireLoginGate();
-    });
+        wireLoginModal();
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootGate);
+    } else {
+        bootGate();
+    }
 
     // Expose globally for other scripts
     window.MCB = {
