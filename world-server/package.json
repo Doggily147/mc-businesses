@@ -1,0 +1,16 @@
+{
+  "name": "mc-world-server",
+  "version": "1.0.0",
+  "description": "Mineflayer bot + WebSocket server. Joins your real MC server, live-streams chunks + block updates + chat to browsers.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "mineflayer": "^4.32.0",
+    "vec3": "^0.1.10",
+    "ws": "^8.18.0"
+  },
+  "engines": { "node": ">=18" }
+}
