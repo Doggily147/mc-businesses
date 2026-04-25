@@ -7,25 +7,25 @@
 (function () {
     // ===== Constants =====
     const TILE = 32;
-    const WORLD_W = 256;          // tiles wide
-    const WORLD_H = 96;           // tiles tall
-    const GROUND_Y = 60;
+    let WORLD_W = 256;            // overwritten when world.json loads
+    let WORLD_H = 130;
     const GRAVITY = 0.5;
     const JUMP_VEL = -10;
     const MOVE_SPEED = 4;
 
-    const BLOCKS = {
+    // BLOCKS gets populated either from the captured palette (world.json) or this fallback
+    let BLOCKS = {
         0: { name: 'air', color: null, solid: false },
-        1: { name: 'grass', color: '#5cb04a', solid: true },
+        1: { name: 'grass_block', color: '#5cb04a', solid: true },
         2: { name: 'dirt', color: '#7a4a2b', solid: true },
         3: { name: 'stone', color: '#888888', solid: true },
-        4: { name: 'wood', color: '#7a5230', solid: true },
-        5: { name: 'leaves', color: '#3d8a3a', solid: true },
+        4: { name: 'oak_log', color: '#7a5230', solid: true },
+        5: { name: 'oak_leaves', color: '#3d8a3a', solid: true },
         6: { name: 'sand', color: '#e6d28a', solid: true },
         7: { name: 'water', color: 'rgba(64,128,255,0.6)', solid: false },
         8: { name: 'tnt', color: '#d83a3a', solid: true }
     };
-    const HOTBAR = [1, 2, 3, 4, 5, 6, 8]; // selectable block ids
+    let HOTBAR = [1, 2, 3, 4, 5, 6, 8];
     let currentSlot = 0;
 
     // ===== State =====
@@ -41,47 +41,65 @@
     window.addEventListener('resize', resize);
     setTimeout(resize, 0);
 
-    const world = new Uint8Array(WORLD_W * WORLD_H);
+    let world = new Uint8Array(WORLD_W * WORLD_H);
     function idx(x, y) { return y * WORLD_W + x; }
     function getBlock(x, y) {
-        if (x < 0 || y < 0 || x >= WORLD_W || y >= WORLD_H) return 3; // stone wall outside
+        if (x < 0 || y < 0 || x >= WORLD_W || y >= WORLD_H) return 3;
         return world[idx(x, y)];
     }
     function setBlock(x, y, b) {
         if (x < 0 || y < 0 || x >= WORLD_W || y >= WORLD_H) return;
         world[idx(x, y)] = b;
-        // Sync to multiplayer
         if (mpDb) mpDb.ref('world/' + idx(x, y)).set(b);
     }
 
-    // ===== World gen (procedural, deterministic from seed) =====
-    function genWorld() {
-        let h = GROUND_Y;
-        for (let x = 0; x < WORLD_W; x++) {
-            // Soft hill noise
-            h += (Math.random() - 0.5) * 1.5;
-            h = Math.max(GROUND_Y - 8, Math.min(GROUND_Y + 6, h));
-            const surface = Math.floor(h);
+    // ===== Load captured server world (world.json) =====
+    // Produced by `world-capture/capture.js` — a Node bot that joins your real server
+    // and exports an 8-chunk-wide vertical slice.
+    async function loadCapturedWorld() {
+        try {
+            const res = await fetch('world.json', { cache: 'no-store' });
+            if (!res.ok) throw new Error(`world.json not found (HTTP ${res.status})`);
+            const data = await res.json();
+            WORLD_W = data.width;
+            WORLD_H = data.height;
+            world = new Uint8Array(WORLD_W * WORLD_H);
+
+            // Rebuild BLOCKS from the palette returned by the capture
+            // Air blocks are non-solid; everything else is solid by default.
+            const newBlocks = { 0: { name: 'air', color: null, solid: false } };
+            for (const idStr of Object.keys(data.palette)) {
+                const id = parseInt(idStr, 10);
+                if (id === 0) continue;
+                const entry = data.palette[idStr];
+                const isFluid = entry.name && (entry.name.includes('water') || entry.name.includes('lava'));
+                newBlocks[id] = { name: entry.name, color: entry.color, solid: !isFluid };
+            }
+            BLOCKS = newBlocks;
+            // Hotbar: pick up to 7 common solid blocks from the palette
+            const solidIds = Object.keys(BLOCKS).map(Number).filter(i => i !== 0 && BLOCKS[i].solid);
+            HOTBAR = solidIds.slice(0, 7);
+
+            // data.blocks[0] is the TOP row → matches our row-major y-from-top layout
             for (let y = 0; y < WORLD_H; y++) {
-                if (y < surface) world[idx(x, y)] = 0;
-                else if (y === surface) world[idx(x, y)] = 1; // grass
-                else if (y < surface + 4) world[idx(x, y)] = 2; // dirt
-                else world[idx(x, y)] = 3; // stone
+                for (let x = 0; x < WORLD_W; x++) {
+                    world[idx(x, y)] = data.blocks[y][x];
+                }
             }
-            // Random tree
-            if (Math.random() < 0.04 && surface > 5) {
-                const th = 4 + Math.floor(Math.random() * 2);
-                for (let t = 1; t <= th; t++) world[idx(x, surface - t)] = 4;
-                for (let dx = -2; dx <= 2; dx++)
-                    for (let dy = -2; dy <= 0; dy++)
-                        if (Math.abs(dx) + Math.abs(dy) < 4) {
-                            const lx = x + dx, ly = surface - th + dy;
-                            if (lx >= 0 && lx < WORLD_W && ly >= 0) world[idx(lx, ly)] = 5;
-                        }
-            }
+
+            // Spawn the player on top of the world
+            player.x = (WORLD_W * TILE) / 2;
+            player.y = 0;
+            renderHotbar();
+            console.log(`[world] Loaded captured slice: ${WORLD_W}×${WORLD_H} from ${data.server}`);
+            return true;
+        } catch (e) {
+            console.warn('[world] No world.json yet — using empty world. Run world-capture to populate.', e.message);
+            return false;
         }
     }
-    genWorld();
+    // Kick off the load (don't block the game loop on it)
+    loadCapturedWorld();
 
     // ===== Player =====
     const player = {

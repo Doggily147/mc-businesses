@@ -1,0 +1,15 @@
+{
+  "name": "mc-world-capture",
+  "version": "1.0.0",
+  "description": "Mineflayer bot that joins your MC server, loads 8 chunks, exports a 2D slice as world.json",
+  "type": "module",
+  "main": "capture.js",
+  "scripts": {
+    "start": "node capture.js"
+  },
+  "dependencies": {
+    "mineflayer": "^4.32.0",
+    "vec3": "^0.1.10"
+  },
+  "engines": { "node": ">=18" }
+}
