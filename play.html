@@ -2,68 +2,84 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Play — MC Server</title>
+<title>MC Clone — Play</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="styles.css">
 <style>
-  .play-wrap { max-width: 720px; margin: 32px auto; padding: 24px; }
-  .play-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
-  .play-card h2 { margin-bottom: 16px; }
-  .play-card label { display: block; font-size: 12px; color: var(--muted); text-transform: uppercase; margin-top: 12px; letter-spacing: .5px; }
-  .play-card input { width: 100%; padding: 10px 14px; margin-top: 4px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font: inherit; }
-  .play-card .row { margin-top: 20px; gap: 12px; }
-  .save-status { margin-top: 18px; padding: 12px; background: var(--panel-2); border-radius: 6px; font-size: 13px; }
-  .save-status .ok { color: var(--accent); }
-  .save-status .err { color: var(--danger); }
-  .play-frame { width: 100%; height: 70vh; border: 0; background: #000; border-radius: 8px; margin-top: 16px; }
+  body { overflow: hidden; }
+  .game-bar {
+    display: flex; gap: 10px; align-items: center; justify-content: space-between;
+    padding: 8px 14px; background: var(--panel); border-bottom: 2px solid var(--border);
+  }
+  .game-bar .left, .game-bar .right { display: flex; gap: 10px; align-items: center; }
+  .game-bar input { padding: 6px 10px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; font: inherit; }
+  .game-bar input[readonly] { color: var(--muted); }
+  .game-bar .small-btn { padding: 6px 12px; font-size: 13px; }
+  #saveStatus { font-size: 12px; color: var(--muted); }
+  #saveStatus .ok { color: var(--accent); }
+  #saveStatus .err { color: var(--danger); }
+
+  #stage {
+    position: relative; width: 100vw; height: calc(100vh - 50px); background: #6db0ff;
+  }
+  #game { display: block; width: 100%; height: 100%; cursor: crosshair; image-rendering: pixelated; }
+
+  /* Hotbar */
+  #hotbar {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 4px; background: rgba(0,0,0,0.4); padding: 6px; border-radius: 6px;
+  }
+  .slot { width: 44px; height: 44px; border: 2px solid #444; background: #222; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #fff; }
+  .slot.active { border-color: var(--accent); }
+
+  /* Chat */
+  #chatPanel {
+    position: absolute; bottom: 70px; left: 12px; width: 320px; max-height: 200px;
+    background: rgba(0,0,0,0.55); padding: 8px; border-radius: 6px; color: #fff; font-size: 13px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  #chatLog { flex: 1; overflow-y: auto; max-height: 160px; }
+  #chatLog .msg { padding: 2px 0; line-height: 1.3; }
+  #chatLog .me { color: var(--accent); }
+  #chatInput { padding: 5px 8px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid #555; border-radius: 4px; font: inherit; }
+
+  #playerCount { position: absolute; top: 8px; right: 12px; background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 4px; color: #fff; font-size: 12px; }
+  #helpToast { position: absolute; top: 8px; left: 12px; background: rgba(0,0,0,0.5); padding: 6px 10px; border-radius: 4px; color: #fff; font-size: 12px; }
 </style>
 </head>
 <body>
 
-<header class="topbar">
-  <div class="brand">
+<div class="game-bar">
+  <div class="left">
     <a href="index.html" class="back">←</a>
-    <div>
-      <h1>Play the server</h1>
-      <div class="tag">Connect via browser · Auto-saves your progress every 5s (encrypted)</div>
-    </div>
+    <input id="playUser" type="text" value="bubbu" maxlength="16" placeholder="Username">
+    <input id="playPass" type="password" value="bubbo" maxlength="60" placeholder="Save passphrase">
+    <button id="pickFolderBtn" class="small-btn primary">Pick save folder</button>
+    <span id="saveStatus" class="muted">Pick a folder to start auto-saving every 5s.</span>
   </div>
-</header>
+  <div class="right">
+    <span class="muted small">Server: 51.161.199.30:26410 · v1.21.11 · godlike gowesting</span>
+  </div>
+</div>
 
-<main class="play-wrap">
-  <div class="play-card">
-    <h2>Server connection</h2>
+<div id="stage">
+  <canvas id="game" width="1280" height="720"></canvas>
 
-    <label>Server address</label>
-    <input id="srvAddr" type="text" value="51.161.199.30:26410" readonly>
+  <div id="helpToast">WASD move · Space jump · Left-click break · Right-click place · 1-6 select · T chat</div>
+  <div id="playerCount">👥 1</div>
 
-    <label>Username</label>
-    <input id="playUser" type="text" value="bubbu" maxlength="16">
-
-    <label>Save passphrase (used to encrypt your local save files)</label>
-    <input id="playPass" type="password" value="bubbo" maxlength="60">
-    <p class="muted small" style="margin-top:6px">⚠️ Anyone who knows your passphrase can read your saved progress. Change "bubbo" if you care about secrecy.</p>
-
-    <div class="row">
-      <button id="pickFolderBtn" class="primary">Pick save folder</button>
-      <button id="connectBtn" class="primary" disabled>Connect & start saving</button>
-    </div>
-
-    <div class="save-status" id="saveStatus">
-      <span class="muted">Pick a folder to begin. Auto-save runs every 5 seconds.</span>
-    </div>
+  <div id="chatPanel">
+    <div id="chatLog"></div>
+    <input id="chatInput" placeholder="Press T to chat, Enter to send" />
   </div>
 
-  <!-- Eaglercraft / Prismarine client mounts here once we know your server software -->
-  <div id="clientMount" hidden>
-    <iframe id="clientFrame" class="play-frame" src="about:blank"></iframe>
-  </div>
+  <div id="hotbar"></div>
+</div>
 
-  <p class="muted" style="margin-top:24px;text-align:center;font-size:12px">
-    The browser client itself ships separately — once we know the server's version + software, this page will load it.
-  </p>
-</main>
-
+<!-- Firebase (optional — multiplayer if configured) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
 <script src="play.js"></script>
 </body>
 </html>

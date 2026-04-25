@@ -47,6 +47,19 @@ Static website cataloging Minecraft server businesses, purchase ledgers, and rei
 
 7. Authentication → **Templates** tab → "Password reset" → optionally customize the from-name. Firebase auto-sends these emails when a user clicks "Forgot my password" — no setup needed.
 
+8. **For the multiplayer game (`play.html`):** also enable Realtime Database. Build → Realtime Database → Create Database → start in test mode → done. Copy the `databaseURL` it gives you into `firebase-config.js`. Then in Realtime DB → Rules, paste:
+
+   ```
+   {
+     "rules": {
+       ".read": true,
+       ".write": true
+     }
+   }
+   ```
+
+   ⚠️ Test mode = anyone on the internet can write. Fine for a friends-only sandbox; lock it down later if you want.
+
 That's it. Reload the site, sign up, and you have real cross-device accounts.
 
 > The values in `firebase-config.js` are **safe to commit publicly**. Security comes from the Firestore rules above, not from hiding the config.
