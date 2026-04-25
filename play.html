@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Play — MC Server</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .play-wrap { max-width: 720px; margin: 32px auto; padding: 24px; }
+  .play-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+  .play-card h2 { margin-bottom: 16px; }
+  .play-card label { display: block; font-size: 12px; color: var(--muted); text-transform: uppercase; margin-top: 12px; letter-spacing: .5px; }
+  .play-card input { width: 100%; padding: 10px 14px; margin-top: 4px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+  .play-card .row { margin-top: 20px; gap: 12px; }
+  .save-status { margin-top: 18px; padding: 12px; background: var(--panel-2); border-radius: 6px; font-size: 13px; }
+  .save-status .ok { color: var(--accent); }
+  .save-status .err { color: var(--danger); }
+  .play-frame { width: 100%; height: 70vh; border: 0; background: #000; border-radius: 8px; margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <a href="index.html" class="back">←</a>
+    <div>
+      <h1>Play the server</h1>
+      <div class="tag">Connect via browser · Auto-saves your progress every 5s (encrypted)</div>
+    </div>
+  </div>
+</header>
+
+<main class="play-wrap">
+  <div class="play-card">
+    <h2>Server connection</h2>
+
+    <label>Server address</label>
+    <input id="srvAddr" type="text" value="51.161.199.30:26410" readonly>
+
+    <label>Username</label>
+    <input id="playUser" type="text" value="bubbu" maxlength="16">
+
+    <label>Save passphrase (used to encrypt your local save files)</label>
+    <input id="playPass" type="password" value="bubbo" maxlength="60">
+    <p class="muted small" style="margin-top:6px">⚠️ Anyone who knows your passphrase can read your saved progress. Change "bubbo" if you care about secrecy.</p>
+
+    <div class="row">
+      <button id="pickFolderBtn" class="primary">Pick save folder</button>
+      <button id="connectBtn" class="primary" disabled>Connect & start saving</button>
+    </div>
+
+    <div class="save-status" id="saveStatus">
+      <span class="muted">Pick a folder to begin. Auto-save runs every 5 seconds.</span>
+    </div>
+  </div>
+
+  <!-- Eaglercraft / Prismarine client mounts here once we know your server software -->
+  <div id="clientMount" hidden>
+    <iframe id="clientFrame" class="play-frame" src="about:blank"></iframe>
+  </div>
+
+  <p class="muted" style="margin-top:24px;text-align:center;font-size:12px">
+    The browser client itself ships separately — once we know the server's version + software, this page will load it.
+  </p>
+</main>
+
+<script src="play.js"></script>
+</body>
+</html>
